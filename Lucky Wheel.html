@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Lucky Wheel – Grade 3</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Tone.js for sound generation (Music Loop removed) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script> 
+    <style>
+        /* Custom styles for the pointer and the wheel area */
+        body {
+            /* Changed font to Comic Sans MS / VNF-Comic Sans equivalent */
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Gradient background for the body */
+        .bg-fun-gradient {
+            background-image: linear-gradient(135deg, #FFEB3B 0%, #4FC3F7 100%);
+        }
+
+        #wheel-container {
+            position: relative;
+            width: 90vw; /* Responsive width */
+            max-width: 420px;
+            aspect-ratio: 1 / 1; /* Keep it square */
+        }
+
+        canvas {
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Pointer CSS block removed as requested */
+
+        /* Custom button styling for a 'fun' look */
+        .spin-button {
+            transition: all 0.15s ease-in-out;
+            box-shadow: 0 4px #10B981, 0 10px 20px rgba(0,0,0,0.2);
+            transform: translateY(0);
+        }
+        .spin-button:active {
+            box-shadow: 0 0 #10B981;
+            transform: translateY(4px);
+        }
+
+        /* CSS for modal effect */
+        @keyframes pulse-once {
+            0% { transform: scale(0.9); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pulse-once {
+            animation: pulse-once 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-fun-gradient flex flex-col items-center justify-center p-4">
+
+    <h1 class="text-4xl sm:text-5xl font-extrabold text-red-600 mb-6 drop-shadow-lg [text-shadow:2px_2px_#ffffff]">
+        🎡 The Lucky Wheel 🎡
+    </h1>
+
+    <div id="wheel-container">
+        <!-- Pointer element has been removed -->
+        <canvas id="wheel" class="rounded-full shadow-2xl"></canvas>
+    </div>
+
+    <button id="spinBtn" class="spin-button mt-8 px-10 py-4 text-2xl font-bold bg-green-500 text-white rounded-full hover:bg-green-600 transition duration-150">
+        SPIN
+    </button>
+
+    <!-- Winner Display Modal -->
+    <div id="winnerDisplay" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center transform scale-100 animate-pulse-once">
+            <p class="text-4xl font-extrabold text-blue-600 mb-4">🥳 Winner Selected! 🥳</p>
+            <h3 id="winnerName" class="text-5xl font-black text-red-700"></h3>
+        </div>
+    </div>
+
+    <div id="questionBox" class="mt-8 p-6 w-full max-w-lg bg-white rounded-2xl shadow-xl border-4 border-yellow-400 hidden">
+        <h2 id="questionText" class="text-2xl font-semibold text-gray-800 mb-4"></h2>
+        <div class="flex flex-col items-center">
+            <!-- Placeholder for external images, using a fallback alt -->
+            <img id="questionImg" src="" alt="Educational Item" class="max-w-[150px] max-h-[150px] object-contain my-4 rounded-lg border border-gray-200" onerror="this.onerror=null; this.src='https://placehold.co/150x150/B53737/FFFFFF?text=Image+Load+Failed';" />
+
+            <button id="checkBtn" class="px-8 py-3 text-xl font-bold bg-blue-500 text-white rounded-full hover:bg-blue-600 transition duration-150 shadow-md active:shadow-sm active:translate-y-0.5">
+                Show Answer
+            </button>
+        </div>
+        <p id="feedback" class="mt-4 text-lg font-medium hidden"></p>
+    </div>
+
+    <div id="endScreen" class="hidden mt-8 text-6xl font-black text-pink-500 drop-shadow-lg text-center [text-shadow:4px_4px_#ffffff]">
+        🎉 Congratulations! All Rounds Complete! 🎉
+        <button id="resetBtn" class="mt-6 px-6 py-3 text-xl font-semibold bg-indigo-500 text-white rounded-full hover:bg-indigo-600 transition duration-150 shadow-md">
+            Play Again
+        </button>
+    </div>
+
+    <div id="alertModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full text-center">
+            <p id="alertMessage" class="text-xl font-semibold text-gray-800 mb-4"></p>
+            <button id="alertCloseBtn" class="px-6 py-2 bg-red-500 text-white rounded-full hover:bg-red-600">Close</button>
+        </div>
+    </div>
+
+<script>
+    // Utility for showing custom alerts instead of window.alert()
+    function showAlert(message) {
+        document.getElementById('alertMessage').textContent = message;
+        document.getElementById('alertModal').classList.remove('hidden');
+        document.getElementById('alertCloseBtn').onclick = () => {
+            document.getElementById('alertModal').classList.add('hidden');
+        };
+    }
+
+    const names = [
+        'Anh','Hân','Q.Huy','Đ.Huy','Khả','Khang','Khiêm','Khôi','T.Kiên','A.Kiên',
+        'Kim','B.Lâm','T.Lâm','Linh','Minh','Kh.Ngân','K.Ngân','Ngọc','Nguyên','Nhi',
+        'Nhiên','Ny','Phú','Phúc','Quỳnh','Thanh','Thảo','Thiện','Trung','Tú','Tường','G.Vy','K.Vy'
+    ];
+
+    // Questions and answers are already in English
+    const questions = [
+        { q: "What is this?", img: "https://cdn.creazilla.com/cliparts/3227428/pencil-clipart-md.png", answer: "pencil" },
+        { q: "What color is it?", img: "https://www.pngarc.com/wp-content/uploads/2024/02/Orange-Book-Clipart-Free-PNG-DownloadFree-Orange-Book-Clipart-Clipart-Orange-Book.png", answer: "orange" },
+        { q: "What color is it?", img: "https://www.shutterstock.com/shutterstock/photos/603798083/display_1500/stock-vector-pencil-case-green-realistic-vector-illustration-isolated-603798083.jpg", answer: "green" },
+        { q: "What is this?", img: "https://toppng.com/uploads/preview/ruler-green-transparent-11546979566aevgqayaec.png", answer: "ruler" },
+        { q: "What is this?", img: "https://toppng.com/uploads/preview/school-bag-clipart-png-11553946971zfxkeagwqc.png", answer: "school bag" }
+    ];
+
+    const wheelContainer = document.getElementById('wheel-container');
+    const canvas = document.getElementById('wheel');
+    const ctx = canvas.getContext('2d');
+    const spinBtn = document.getElementById('spinBtn');
+    const checkBtn = document.getElementById('checkBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const questionBox = document.getElementById('questionBox');
+    const questionText = document.getElementById('questionText');
+    const questionImg = document.getElementById('questionImg');
+    const feedback = document.getElementById('feedback');
+    const endScreen = document.getElementById('endScreen');
+
+    // New Winner Elements
+    const winnerDisplay = document.getElementById('winnerDisplay');
+    const winnerNameElement = document.getElementById('winnerName');
+
+    let currentQuestion = null;
+    let spins = 0;
+    let angle = 0;
+    let center, radius, slice;
+
+    // --- Tone.js Sound Setup ---
+    let musicStarted = false;
+    let spinningSynth, stopSynth;
+    let spinEventId = null; // Variable to hold the ID of the spinning sound event
+
+    // Initialize Synths for Spin and Stop sounds
+    function initializeAudioComponents() {
+        if (spinningSynth) return;
+
+        // 1. Spinning Sound: Fast, repetitive sound for suspense
+        spinningSynth = new Tone.MembraneSynth({
+            pitchDecay: 0.05,
+            octaves: 0.5,
+            envelope: {
+                attack: 0.001,
+                decay: 0.1,
+                sustain: 0.01,
+                release: 0.1,
+                attackCurve: 'exponential'
+            }
+        }).toDestination();
+        
+        // 2. Stop/Win/Celebrate Sound: PolySynth for chords
+        stopSynth = new Tone.PolySynth(Tone.Synth).toDestination();
+        
+        // Ensure Tone Transport is started for schedule and repeat to work
+        Tone.Transport.start(); 
+    }
+    
+    function startSpinningSound(duration) {
+        // Clear any previous spinning sound event if it somehow got stuck
+        if (spinEventId !== null) {
+            Tone.Transport.clear(spinEventId);
+        }
+
+        // Store the returned event ID directly for clearing later
+        spinEventId = Tone.Transport.scheduleRepeat(time => {
+            const freq = Math.random() > 0.5 ? "C5" : "G5"; // Simple alternating high notes
+            spinningSynth.triggerAttackRelease(freq, "32n", time);
+        }, "16n", 0); // Repeat every 16th note
+
+        // Stop the repeating sound after the spin duration
+        Tone.Transport.schedule(time => {
+            if (spinEventId !== null) {
+                Tone.Transport.clear(spinEventId); // Clear using the stored ID
+                spinEventId = null; 
+            }
+            playStopSound(time);
+        }, `+${duration / 1000}`);
+    }
+
+    function playStopSound(time) {
+        // Cheerful C major chord (C5-E5-G5)
+        stopSynth.triggerAttackRelease(["C5", "E5", "G5"], "4n", time);
+    }
+    
+    // Sound for revealing the answer
+    function playCelebrateSound() {
+        // Brighter, higher chord (F5-A5-C6) for celebration
+        if (stopSynth) {
+             stopSynth.triggerAttackRelease(["F5", "A5", "C6"], "4n"); 
+        }
+    }
+
+
+    // --- Resizing and Drawing Setup ---
+
+    function setCanvasDimensions() {
+        // Calculate the responsive size of the canvas based on its container
+        const size = wheelContainer.offsetWidth;
+        canvas.width = size;
+        canvas.height = size;
+
+        center = size / 2;
+        radius = center - 10; // slightly smaller than half to fit within container
+        
+        // Ensure radius is not negative or zero to prevent IndexSizeError
+        if (radius <= 0) {
+            radius = 1; 
+        }
+
+        slice = (2 * Math.PI) / names.length;
+
+        drawWheel();
+    }
+    
+    // Function to calculate a complementary color for better contrast
+    function getContrastColor(hsl) {
+        // Based on the HSL string (hsl(H, 90%, 70%)), determine if light or dark contrast is needed.
+        // Since Lightness is 70% (bright), we use black (#000) for contrast.
+        // For darker colors, white (#FFF) would be used.
+        return '#000'; // Always use black on these bright colors for better readability
+    }
+
+
+    function drawWheel() {
+        // Clear the canvas and redraw everything
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Calculate font size based on canvas size for responsiveness
+        const fontSize = Math.max(12, Math.min(18, canvas.width / 25)); // Keep font readable
+
+        for (let i = 0; i < names.length; i++) {
+            // Calculate HSL color for the slice
+            const hue = (i * 360 / names.length + angle * (180/Math.PI)) % 360;
+            const sliceColor = `hsl(${hue}, 90%, 70%)`;
+            
+            // Determine text color based on slice color
+            const textColor = getContrastColor(sliceColor);
+
+
+            ctx.beginPath();
+            // Use HSL for vibrant color slices
+            ctx.fillStyle = sliceColor;
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+
+            const startAngle = angle + i * slice;
+            const endAngle = angle + (i + 1) * slice;
+
+            ctx.moveTo(center, center);
+            ctx.arc(center, center, radius, startAngle, endAngle);
+            ctx.fill();
+            ctx.stroke();
+
+            // Draw Text
+            ctx.save();
+            ctx.translate(center, center);
+            ctx.rotate(startAngle + slice / 2);
+            ctx.textAlign = 'right';
+            
+            // Set contrasting text color
+            ctx.fillStyle = textColor; 
+            
+            ctx.font = `${fontSize}px 'Comic Sans MS', cursive`;
+            // Position the text away from the center
+            ctx.fillText(names[i], radius - 15, fontSize / 3);
+            ctx.restore();
+        }
+
+        // DRAW THE CENTRAL HUB (Central Hub)
+        ctx.beginPath();
+        // Hub radius is 15% of the wheel radius
+        const hubRadius = radius * 0.15; 
+        ctx.arc(center, center, hubRadius, 0, 2 * Math.PI); 
+        ctx.fillStyle = '#FF9800'; // Orange
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 3;
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    // --- Winner Calculation Logic ---
+
+    function calculateWinner() {
+        const totalSegments = names.length;
+        // Pointer is at 12 o'clock (top)
+        const pointerRad = 1.5 * Math.PI; 
+
+        // 1. Normalize the total rotation angle
+        let normalizedAngle = angle % (2 * Math.PI);
+        if (normalizedAngle < 0) normalizedAngle += 2 * Math.PI;
+
+        // 2. Calculate the slice angle under the pointer
+        // Formula: (Pointer Angle - Rotation Angle)
+        let winningSliceAngle = (pointerRad - normalizedAngle);
+        
+        // 3. Normalize this angle to be between 0 and 2*PI
+        winningSliceAngle = winningSliceAngle % (2 * Math.PI);
+        if (winningSliceAngle < 0) {
+            winningSliceAngle += 2 * Math.PI;
+        }
+
+        // 4. Determine the index (slice 0 starts at 0 rad/3 o'clock)
+        let winningIndex = Math.floor(winningSliceAngle / slice);
+
+        // Return the student's name
+        return names[winningIndex % totalSegments];
+    }
+    
+    function showWinnerName() {
+        // 1. Calculate the winner's name
+        const winnerName = calculateWinner();
+        
+        // 2. Display the winner modal
+        winnerNameElement.textContent = winnerName;
+        winnerDisplay.classList.remove('hidden');
+        
+        // 3. Wait 3 seconds, then hide the modal and show the question box
+        setTimeout(() => {
+            winnerDisplay.classList.add('hidden');
+            showQuestion();
+        }, 3000); 
+    }
+
+
+    // Initialize dimensions and redraw on resize
+    window.addEventListener('load', setCanvasDimensions);
+    window.addEventListener('resize', setCanvasDimensions);
+
+
+    // --- Game Logic ---
+
+    spinBtn.onclick = () => {
+        // Initialize audio components if not done
+        initializeAudioComponents();
+
+        // Music started flag is now used just to check if audio components are ready
+        musicStarted = true;
+        
+        if (spins >= 5) return showAlert("You have completed 5 rounds! Click 'Play Again' to restart.");
+
+        spinBtn.disabled = true;
+        questionBox.classList.add('hidden');
+        feedback.classList.add('hidden');
+
+        // Random spin distance (3-4 full rotations + stopping point)
+        const totalRotations = 3 + Math.random() * 1;
+        const targetSliceIndex = Math.floor(Math.random() * names.length);
+        const targetAngleOffset = targetSliceIndex * slice + slice / 2;
+
+        // Calculate the final angle
+        const currentAngleNormalized = angle % (2 * Math.PI);
+        let spinAngle = totalRotations * 2 * Math.PI + targetAngleOffset - currentAngleNormalized;
+
+        // Ensure the spin is always positive and large enough
+        if (spinAngle < 2 * Math.PI * 3) {
+             spinAngle += 2 * Math.PI * 3; // Minimum 3 rotations
+        }
+
+        let startTime = null;
+        const duration = 5000; // 5 seconds spin
+
+        // Start the suspense sound
+        startSpinningSound(duration); 
+
+        function animate(timestamp) {
+            if (!startTime) startTime = timestamp;
+            let progress = timestamp - startTime;
+            let t = Math.min(1, progress / duration);
+
+            // Easing function: start fast, slow down to a stop (Cubic ease-out)
+            let easing = 1 - Math.pow(1 - t, 3);
+
+            // Update angle based on easing
+            angle += spinAngle * (easing - (1 - Math.pow(1 - Math.max(0, progress - 16) / duration, 3))); // Approximate difference for smooth rotation
+
+            // Redraw the wheel
+            drawWheel();
+
+            if (progress < duration) {
+                requestAnimationFrame(animate);
+            } else {
+                angle = currentAngleNormalized + spinAngle; // Set final angle
+                drawWheel();
+                spins++;
+                
+                // Show the winner's name before the question
+                showWinnerName();
+                
+                spinBtn.disabled = false;
+            }
+        }
+        requestAnimationFrame(animate);
+    };
+
+    function showQuestion() {
+        const qIndex = (spins - 1) % questions.length;
+        currentQuestion = questions[qIndex];
+
+        // Display question in English
+        questionText.textContent = `Round ${spins}: ${currentQuestion.q}`;
+        questionImg.src = currentQuestion.img;
+        questionImg.alt = currentQuestion.answer; // Use alt for accessibility/fallback
+        questionBox.classList.remove('hidden');
+        checkBtn.disabled = false;
+        checkBtn.classList.remove('hidden');
+        checkBtn.textContent = "Show Answer"; // Button text in English
+    }
+
+    checkBtn.onclick = () => {
+        if (!currentQuestion) return showAlert("Please spin the wheel first!");
+
+        // Logic: Automatically show the answer
+        const correctAnswer = currentQuestion.answer;
+
+        // Play celebration sound when the answer is revealed (NEW)
+        playCelebrateSound();
+
+        // Display answer feedback in English
+        feedback.textContent = `The correct answer is: ${correctAnswer.toUpperCase()}! 👍`;
+        feedback.className = 'mt-4 text-lg font-bold text-green-600';
+        
+        checkBtn.disabled = true;
+
+        feedback.classList.remove('hidden');
+        
+        if (spins === 5) {
+            endGame();
+        } else {
+            // Prepare for the next round
+            spinBtn.textContent = `Spin for Round ${spins + 1}`;
+            setTimeout(() => {
+                questionBox.classList.add('hidden');
+            }, 3000); // Wait 3 seconds to review the answer before hiding
+        }
+    };
+
+    function endGame() {
+        // Show end screen after a short delay
+        setTimeout(() => {
+            wheelContainer.classList.add('hidden');
+            spinBtn.classList.add('hidden');
+            questionBox.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+        }, 1500);
+    }
+
+    resetBtn.onclick = () => {
+        spins = 0;
+        angle = 0;
+        currentQuestion = null;
+        setCanvasDimensions(); // Redraw the wheel
+        endScreen.classList.add('hidden');
+        wheelContainer.classList.remove('hidden');
+        spinBtn.classList.remove('hidden');
+        spinBtn.textContent = "SPIN";
+    }
+
+    // Initial setup on load
+    setCanvasDimensions();
+</script>
+
+</body>
+</html>
